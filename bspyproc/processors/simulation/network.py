@@ -29,7 +29,7 @@ class TorchModel(nn.Module):
             self.input_indices = configs['input_indices']
             self.control_voltage_indices = get_control_voltage_indices(self.input_indices, configs['input_electrode_no'])
         else:
-            print('Warning: Input indices and control voltage indices have not been defined.')
+            print('Warning: Number of input electrodes and input electrode indices have not been defined.')
         if TorchUtils.get_accelerator_type() == torch.device('cuda'):
             self.model.cuda()
 
