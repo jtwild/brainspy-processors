@@ -21,8 +21,8 @@ class DNPUArchitecture(nn.Module):
         self.info['smg_configs'] = configs
         # self.offset = self.init_offset(configs['offset']['min'], configs['offset']['max'])
         # self.scale = self.init_scale(configs['scale']['min'], configs['scale']['max'])
-        self.alpha = 0.5
-        self.beta = 0.5
+        self.alpha = TorchUtils.format_tensor(torch.tensor([100]))
+        # self.beta = 0.5
 
     def init_offset(self, offset_min, offset_max):
         offset = offset_min + offset_max * np.random.rand(1, 2)
@@ -108,6 +108,10 @@ class TwoToTwoToOneDNPU(DNPUArchitecture):
         self.hidden_node2_clipping_value = base_clipping_value * self.hidden_node2.get_amplification_value()
         self.output_node_clipping_value = base_clipping_value * self.output_node.get_amplification_value()
 
+    def get_amplification_value(self):
+        print('Warning: Getting amplification value from the first input node only!')
+        return self.input_node1.get_amplification_value()
+
     def forward_with_debug(self, x):
         # Scale and offset
         # x = (self.scale * x) + self.offset
@@ -129,9 +133,9 @@ class TwoToTwoToOneDNPU(DNPUArchitecture):
             + self.hidden_node1.regularizer() + self.hidden_node2.regularizer() \
             + self.output_node.regularizer()
 
-        affine_penalty = 0  # self.offset_penalty() + self.scale_penalty()
+        # affine_penalty = 0  # self.offset_penalty() + self.scale_penalty()
 
-        return (self.alpha * control_penalty) + (self.beta * affine_penalty)
+        return (self.alpha * control_penalty)  # + (self.beta * affine_penalty)
 
     def process_layer(self, x1, x2, bn, clipping_value_1, clipping_value_2, i):
         # Clip values at 400
@@ -188,3 +192,8 @@ class TwoToTwoToOneDNPU(DNPUArchitecture):
         w4 = next(self.hidden_node2.parameters())  # .detach().cpu().numpy()
         w5 = next(self.output_node.parameters())  # .detach().cpu().numpy()
         return torch.stack([w1, w2, w3, w4, w5]).detach()  # .cpu().numpy()
+
+    def load_state_dict(self, state_dict):
+        self.info = state_dict['info']
+        del state_dict['info']
+        super().load_state_dict(state_dict)

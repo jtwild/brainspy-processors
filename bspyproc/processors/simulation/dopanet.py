@@ -38,26 +38,19 @@ class DNPU(TorchModel):
     def init_bias(self):
         self.control_low = self.min_voltage[self.control_voltage_indices]
         self.control_high = self.max_voltage[self.control_voltage_indices]
-
+        assert any(self.control_low < 0), "Min. Voltage is assumed to be negative, but value is positive!"
+        assert any(self.control_high > 0), "Max. Voltage is assumed to be positive, but value is negative!"
         bias = self.min_voltage[self.control_voltage_indices] + \
             (self.max_voltage[self.control_voltage_indices] - self.min_voltage[self.control_voltage_indices]) * \
             TorchUtils.get_tensor_from_numpy(np.random.rand(1, self.control_voltage_no))
 
         self.bias = nn.Parameter(TorchUtils.get_tensor_from_numpy(bias))
 
-    # def get_output(self, input_matrix):
-    #     with torch.no_grad():
-    #         inputs_torch = TorchUtils.get_tensor_from_numpy(input_matrix)
-    #         output = self.forward(inputs_torch)
-    #     return TorchUtils.get_numpy_from_tensor(output)
-
     def forward(self, x):
         inp = merge_inputs_and_control_voltages_in_torch(x, self.bias.expand(x.size()[0], -1), self.input_indices, self.control_voltage_indices)
         return self.forward_processed(inp)
 
     def regularizer(self):
-        assert any(self.control_low < 0), "Min. Voltage is assumed to be negative, but value is positive!"
-        assert any(self.control_high > 0), "Max. Voltage is assumed to be positive, but value is negative!"
         return torch.sum(torch.relu(self.control_low - self.bias) + torch.relu(self.bias - self.control_high))
 
     def reset(self):
