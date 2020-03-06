@@ -1,4 +1,5 @@
 from bspyproc.utils.pytorch import TorchUtils
+from bspyproc.processors.simulation.IOnet import InputScaleNet
 from bspyproc.processors.simulation.dopanet import DNPU
 from bspyproc.processors.simulation.network import TorchModel
 from bspyproc.processors.hardware.setup_mgr import CDAQtoCDAQ, CDAQtoNiDAQ
@@ -39,6 +40,8 @@ def get_neural_network_simulation_processor(configs):
         return TorchModel(configs)
     elif configs['network_type'] == 'dnpu':
         return DNPU(configs)
+    elif configs['network_type'] == 'IOnet':
+        return InputScaleNet(configs)
     else:
         raise NotImplementedError(f"{configs['network_type']} 'network_type' configuration is not recognised. The simulation type has to be defined as 'device_model', 'nn_model' or 'dpnu'. ")
 
