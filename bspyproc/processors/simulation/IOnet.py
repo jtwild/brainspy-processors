@@ -26,27 +26,48 @@ class InputScaleNet(DNPU):
             self.scaling = nn.Parameter( torch.zeros(1,self.input_no) )
             #self.scale_matrix = torch.mm(torch.ones(2**self.input_no), self.scaling )
             self.forward = self.forward_multi_scaler
-        self.reset()             #randomly initialize all variables.
+        else:
+            raise ValueError('Unknown IOnet mode supplied.')
+
         # Variables used by methods:
         self.input_low = self.min_voltage[self.input_indices]
         self.input_high = self.max_voltage[self.input_indices]
-        self.output_high = configs['IOinfo']['output_high']
-        self.output_low = configs['IOinfo']['output_low']
 
-        # Register parameters
-        # IS this automatically done for nn.Parameters?
-        #self.register_parameter('ioscaler', self.scaling)
-        #self.register_parameter('ioscaler', self.offset)
+        # Specific IOinfo key loading
+        if 'output_high' in configs['IOinfo'].keys():
+            self.output_high = configs['IOinfo']['output_high']
+        else:
+            # Default value.
+            self.output_high = 76
+        if 'output_low' in configs['IOinfo'].keys():
+            self.output_low = configs['IOinfo']['output_low']
+        else:
+            self.output_low = -330
+        if 'offset_low' in configs['IOinfo'].keys():
+            self.offset_low = configs['IOinfo']['offset_low']
+        else:
+            self.offset_low = 0
+        if 'offset_high' in configs['IOinfo'].keys():
+            self.offset_high = configs['IOinfo']['offset_high']
+        else:
+            self.offset_high = 0.6
+        if 'scaling_low' in configs['IOinfo'].keys():
+            self.scaling_low = configs['IOinfo']['scaling_low']
+        else:
+            self.scaling_low = 0.1
+        if 'scaling_high' in configs['IOinfo'].keys():
+            self.scaling_high = configs['IOinfo']['scaling_high']
+        else:
+            self.scaling_high = 1.5
 
-        # Parameters must also be added to optimizer!
-        # Goes correctly if this class is initiated before the optimizer, so should be fine?
-        # Optimizer loading is defined in GDData (gd.py) by init_optimizer, perhaps also the place where variable learning rate can be defined.
+        # Randomly intialize all variables
+        self.reset()
 
     def reset(self):
         super().reset()
         # Max and min values for random initialization are hardcoded for now...
-        self.offset.data[:].uniform_(0, 0.6)
-        self.scaling.data[:].uniform_(0.1, 1.5)
+        self.offset.data[:].uniform_(self.offset_low, self.offset_high)
+        self.scaling.data[:].uniform_(self.scaling_low, self.scaling_high)
 
     def forward_single_scaler(self, x):
         # Add a single layer which can add an offset and a bias to the inputs given.
@@ -62,10 +83,11 @@ class InputScaleNet(DNPU):
         self.output = super().forward(self.input)     #self.output is used by regularizer
         return self.output
 
+    def forward_without_scaling(self, x):
+        return super().forward(x)
+
     def get_input_scaling(self):
         return self.offset.tolist(), self.scaling.tolist()
-        # def get_control_voltages(self):
-        #     return next(self.parameters()).detach() * self.scaling.detach() + self.offset.detach()
 
     def regularizer(self):
         # regularize output
@@ -78,11 +100,7 @@ class InputScaleNet(DNPU):
         # from super: return torch.sum(torch.relu(self.control_low - self.bias) + torch.relu(self.bias - self.control_high))
 
     def get_output(self, input_matrix=None):
-        # If no input matrix is supplied, return the most recent output.
-        if input_matrix == None:
-            return self.output
-        else:
-            super().get_output(input_matrix)
+        super().get_output(input_matrix)
 
 # FOr adding a complete first layer with inputs trainable a piece, the nn.Sequential might be called with nn.Linear
 
