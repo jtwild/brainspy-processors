@@ -16,18 +16,6 @@ class InputScaleNet(DNPU):
     def __init__(self, configs):
         # Load DNPU parent class
         super().__init__(configs)
-        # Create parameters. Initial value will be overwritten by reset.
-        if configs['IOinfo']['mode'] == 'single_scaler':
-            self.offset = nn.Parameter(torch.zeros(1))
-            self.scaling = nn.Parameter(torch.zeros(1))
-            self.forward = self.forward_single_scaler
-        elif configs['IOinfo']['mode'] == 'multi_scaler':
-            self.offset = nn.Parameter( torch.zeros(1,self.input_no) )
-            self.scaling = nn.Parameter( torch.zeros(1,self.input_no) )
-            #self.scale_matrix = torch.mm(torch.ones(2**self.input_no), self.scaling )
-            self.forward = self.forward_multi_scaler
-        else:
-            raise ValueError('Unknown IOnet mode supplied.')
 
         # Variables used by methods:
         self.input_low = self.min_voltage[self.input_indices]
@@ -42,7 +30,7 @@ class InputScaleNet(DNPU):
         if 'output_low' in configs['IOinfo'].keys():
             self.output_low = configs['IOinfo']['output_low']
         else:
-            self.output_low = -330
+            self.output_low = -320
         if 'offset_low' in configs['IOinfo'].keys():
             self.offset_low = configs['IOinfo']['offset_low']
         else:
@@ -59,9 +47,26 @@ class InputScaleNet(DNPU):
             self.scaling_high = configs['IOinfo']['scaling_high']
         else:
             self.scaling_high = 1.5
+        # Create parameters. Initial value will be overwritten by reset.
+        if configs['IOinfo']['mode'] == 'single_scaler':
+            self.offset = nn.Parameter(torch.zeros(1))
+            self.scaling = nn.Parameter(torch.zeros(1))
+            self.forward = self.forward_single_scaler
+            self.reset()
+        elif configs['IOinfo']['mode'] == 'multi_scaler':
+            self.offset = nn.Parameter( torch.zeros(1,self.input_no) )
+            self.scaling = nn.Parameter( torch.zeros(1,self.input_no) )
+            #self.scale_matrix = torch.mm(torch.ones(2**self.input_no), self.scaling )
+            self.forward = self.forward_multi_scaler
+            self.reset()
+        elif configs['IOinfo']['mode'] == 'None':
+            self.offset = torch.tensor([[0.0]]) # not trainable
+            self.scaling = torch.tensor([[1.0]])
+            self.forward = self.forward_single_scaler
+            super().reset()
+        else:
+            raise ValueError('Unknown IOnet mode supplied.')
 
-        # Randomly intialize all variables
-        self.reset()
 
     def reset(self):
         super().reset()
@@ -84,7 +89,9 @@ class InputScaleNet(DNPU):
         return self.output
 
     def forward_without_scaling(self, x):
-        return super().forward(x)
+        self.input = x
+        self.output = super().forward(x)
+        return self.output
 
     def get_input_scaling(self):
         return self.offset.tolist(), self.scaling.tolist()
