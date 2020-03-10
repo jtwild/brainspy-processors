@@ -83,7 +83,9 @@ class InputScaleNet(DNPU):
 
     def reset_multi_scaler(self):
         super().reset()
+        print('Deliberately left a bug here in IOnet , reset multi scaler. Only the first index gets initialized randomly upon a new attemtps. The others remian the same and are thus continued in their training.')
         for k in range(len(self.input_offset)):
+        #for k in range(len(self.input_indices)):
             self.input_offset.data[:, k].uniform_(self.input_offset_low[k], self.input_offset_high[k])
             self.scaling.data[:, k].uniform_(self.scaling_low[k], self.scaling_high[k])
         #We should be clearing gradients here?
