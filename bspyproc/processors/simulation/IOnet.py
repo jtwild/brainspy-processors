@@ -58,8 +58,8 @@ class InputScaleNet(DNPU):
             # Reduce the interval of sclaing and offset, since we have to choose one vlaue for all electrodes.
             self.scaling_low = min(self.scaling_low)
             self.scaling_high = max(self.scaling_high)
-            self.input_offset_low = 0;#max(self.input_offset_low)
-            self.input_offset_high = 0;#min(self.input_offset_high)
+            self.input_offset_low = max(self.input_offset_low)
+            self.input_offset_high = min(self.input_offset_high)
             # Register new parameters
             self.input_offset = nn.Parameter(torch.zeros(1))
             self.scaling = nn.Parameter(torch.zeros(1))
@@ -73,8 +73,8 @@ class InputScaleNet(DNPU):
         elif configs['IOinfo']['mode'] == 'None':
             self.input_offset = torch.tensor([[0.0]]) # not trainable
             self.scaling = torch.tensor([[1.0]])
-            self.forward = self.forward_without_scaler
-            self.reset= reset_none_scaler
+            self.forward = self.forward_none_scaler
+            self.reset= self.reset_none_scaler
         else:
             raise ValueError('Unknown IOnet mode supplied.')
         # Reinitialize all parameters accordingly.
