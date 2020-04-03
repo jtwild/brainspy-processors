@@ -38,8 +38,10 @@ class DNPU(SurrogateModel):
     def init_bias(self):
         self.control_low = self.min_voltage[self.control_voltage_indices]
         self.control_high = self.max_voltage[self.control_voltage_indices]
-        assert any(self.control_low < 0), "Min. Voltage is assumed to be negative, but value is positive!"
-        assert any(self.control_high > 0), "Max. Voltage is assumed to be positive, but value is negative!"
+        if self.control_voltage_no > 0:
+            # Only assert if existing.
+            assert any(self.control_low < 0), "Min. Voltage is assumed to be negative, but value is positive!"
+            assert any(self.control_high > 0), "Max. Voltage is assumed to be positive, but value is negative!"
         bias = self.min_voltage[self.control_voltage_indices] + \
             (self.max_voltage[self.control_voltage_indices] - self.min_voltage[self.control_voltage_indices]) * \
             TorchUtils.get_tensor_from_numpy(np.random.rand(1, self.control_voltage_no))
