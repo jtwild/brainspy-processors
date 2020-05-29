@@ -9,7 +9,7 @@ import time
 from bspyproc.processors.hardware import task_mgr
 from bspyproc.utils.control import get_control_voltage_indices, merge_inputs_and_control_voltages_in_numpy
 import nidaqmx.system.device as device
-import signal 
+import signal
 import threading
 from threading import Thread
 import queue
@@ -19,7 +19,7 @@ import queue
 INPUT_VOLTAGE_THRESHOLD = 1.5
 CDAQ_TO_NIDAQ_RAMPING_TIME_SECONDS = 0.1
 CDAQ_TO_CDAQ_RAMPING_TIME_SECONDS = 0.03
-SYNCHRONISATION_VALUE = 0.04 # do not reduce to less than 0.02
+SYNCHRONISATION_VALUE = 0.04  # do not reduce to less than 0.02
 
 
 class NationalInstrumentsSetup():
@@ -64,16 +64,20 @@ class NationalInstrumentsSetup():
             p = Thread(target=self._read_data, args=(y,))
             p.start()
             p.join()
+            if self.data_results is None:
+                print('Nothing could be read. Stopping program')
+                self.os_signal_handler(None)
             semaphore.release()
         return self.data_results
         # results = self.results_queue.get()
         # self.results_queue.task_done()
-        # return 
+        # return
 
     def _read_data(self, y):
         '''
             y = It represents the input data as matrix where the shpe is defined by the "number of inputs to the device" times "input points that you want to input to the device".
         '''
+        self.data_results = None
         self.read_security_checks(y)
         self.driver.start_tasks(y, self.configs['auto_start'])
         read_data = self.driver.read(self.offsetted_shape, self.ceil)
@@ -82,8 +86,11 @@ class NationalInstrumentsSetup():
         return read_data
 
     def read_security_checks(self, y):
-        assert y[y <= INPUT_VOLTAGE_THRESHOLD].size > 0 or y[y >= -INPUT_VOLTAGE_THRESHOLD].size > 0, f"A value is higher/lower than the threshold of +/-{INPUT_VOLTAGE_THRESHOLD}. Stopping the program in order to avoid damage to the device."
-        assert np.argwhere(y[:,0] != 0).size == 0 and np.argwhere(y[:,-1] != 0).size == 0
+        for n, y_i in enumerate(y):
+            assert all(y_i < INPUT_VOLTAGE_THRESHOLD), f"Voltages in electrode {n} higher ({y_i.max()}) than the max. allowed value ({INPUT_VOLTAGE_THRESHOLD} V)"
+            assert all(y_i > -INPUT_VOLTAGE_THRESHOLD), f"Voltages in electrode {n} lower ({y_i.min()}) than the min. allowed value ({-INPUT_VOLTAGE_THRESHOLD} V)"
+            assert y_i[0] == 0., f"First value of input stream in electrode {n} is non-zero ({y_i[0]})"
+            assert y_i[-1] == 0., f"Last value of input stream in electrode {n} is non-zero ({y_i[-1]})"
 
     def close_tasks(self):
         self.driver.close_tasks()
@@ -123,28 +130,28 @@ class NationalInstrumentsSetup():
 
     def disable_os_signals(self):
         if sys.platform == "win32":
-            import win32api # ignoring the signal
+            import win32api  # ignoring the signal
             win32api.SetConsoleCtrlHandler(None, True)
         else:
             signal.signal(signal.SIGTERM, signal.SIG_IGN)
             signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
-
 class CDAQtoCDAQ(NationalInstrumentsSetup):
 
     def __init__(self, configs):
         configs['auto_start'] = True
-        configs['offset'] = 0
+        configs['offset'] = 1
         configs['max_ramping_time_seconds'] = CDAQ_TO_CDAQ_RAMPING_TIME_SECONDS
         super().__init__(configs)
         self.driver.start_trigger(self.configs['trigger_source'])
 
     def get_output(self, y):
+        y = np.concatenate((y, y[-1, :] * np.ones((1, y.shape[1]))))
         y = y.T
-        assert self.configs['shape'] == y.shape[1]
+        assert self.configs['shape'] + 1 == y.shape[1], f"configs value with key 'shape' must be {y.shape[1]-1}"
         data = self.read_data(y)
-        data = self.process_output_data(data)
+        data = -1 * self.process_output_data(data)[:, 1:]
         return data.T
 
 
@@ -159,7 +166,7 @@ class CDAQtoNiDAQ(NationalInstrumentsSetup):
 
     def get_output(self, y):
         y = y.T
-        assert self.configs['shape'] == y.shape[1]
+        assert self.configs['shape'] == y.shape[1], f"configs value with key 'shape' must be {y.shape[1]}"
         y = self.synchronise_input_data(y)
         max_attempts = 5
         attempts = 1
@@ -206,5 +213,3 @@ class CDAQtoNiDAQ(NationalInstrumentsSetup):
     def synchronise_output_data(self, read_data):
         cut_value = self.get_output_cut_value(read_data)
         return read_data[:-1, cut_value:self.configs['shape'] + cut_value]
-
-    

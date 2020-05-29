@@ -22,6 +22,11 @@ class DNPU(SurrogateModel):
     def __init__(self, configs):
         super().__init__(configs)
         self.init_electrode_info(configs)
+        if 'regularisation_factor' in configs:
+            self.alpha = TorchUtils.format_tensor(torch.tensor(configs['regularisation_factor']))
+        else:
+            print('No regularisation factor set.')
+            self.alpha = TorchUtils.format_tensor(torch.tensor([1]))
         # Freeze parameters
         for params in self.parameters():
             params.requires_grad = False
@@ -44,14 +49,14 @@ class DNPU(SurrogateModel):
             (self.max_voltage[self.control_voltage_indices] - self.min_voltage[self.control_voltage_indices]) * \
             TorchUtils.get_tensor_from_numpy(np.random.rand(1, self.control_voltage_no))
 
-        self.bias = nn.Parameter(TorchUtils.get_tensor_from_numpy(bias))
+        self.bias = nn.Parameter(bias)
 
     def forward(self, x):
         inp = merge_inputs_and_control_voltages_in_torch(x, self.bias.expand(x.size()[0], -1), self.input_indices, self.control_voltage_indices)
         return self.forward_processed(inp)
 
     def regularizer(self):
-        return torch.sum(torch.relu(self.control_low - self.bias) + torch.relu(self.bias - self.control_high))
+        return self.alpha * (torch.sum(torch.relu(self.control_low - self.bias) + torch.relu(self.bias - self.control_high)))
 
     def reset(self):
         for k in range(len(self.control_low)):
@@ -72,7 +77,7 @@ if __name__ == '__main__':
     loss = nn.MSELoss()
     optimizer = torch.optim.Adam([{'params': node.parameters()}], lr=0.01)
 
-    LOSS_LIST = []
+    LOSS_LIST = [] 
     CHANGE_PARAMS_NET = []
     CHANGE_PARAMS0 = []
 
