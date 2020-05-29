@@ -24,6 +24,7 @@ class DNPU(SurrogateModel):
         self.init_electrode_info(configs)
         if 'regularisation_factor' in configs:
             self.alpha = TorchUtils.format_tensor(torch.tensor(configs['regularisation_factor']))
+            print(f'Regularisation factor set at {self.alpha}')
         else:
             print('No regularisation factor set.')
             self.alpha = TorchUtils.format_tensor(torch.tensor([1]))
@@ -56,7 +57,10 @@ class DNPU(SurrogateModel):
         return self.forward_processed(inp)
 
     def regularizer(self):
-        return self.alpha * (torch.sum(torch.relu(self.control_low - self.bias) + torch.relu(self.bias - self.control_high)))
+        # relative regularizer, giving a penalty to the loss dependent on how far (relatively) we are outside the allowed voltage range,
+        # mutilpied with the regularisation factor self.alpha
+        return self.alpha * torch.sum((torch.relu(self.control_low - self.bias) + torch.relu(self.bias - self.control_high)) / self.amplitude[self.control_voltage_indices])
+#        return self.alpha * (torch.sum(torch.relu(self.control_low - self.bias) + torch.relu(self.bias - self.control_high)))
 
     def reset(self):
         for k in range(len(self.control_low)):
